@@ -926,8 +926,15 @@ body {
   <div class="modal" style="max-width:340px; padding:28px;">
     <button class="modal-close" onclick="closeModal('evModal')">✕</button>
     <div class="ev-modal-inner" id="evContent"></div>
-    <div style="text-align:center;margin-top:18px;">
-      <button class="btn btn-rose" onclick="closeModal('evModal')" style="padding:10px 24px;">Wonderful! 🌸</button>
+    <div style="margin-top:18px;">
+      <div style="font-family:'Montserrat',sans-serif;font-size:0.58rem;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:var(--text-light);text-align:center;margin-bottom:10px;">Add to your calendar</div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;">
+        <button class="btn btn-rose" onclick="downloadICS()" style="padding:10px 18px;font-size:0.65rem;">📅 Apple / Outlook</button>
+        <button class="btn btn-champagne" onclick="openGoogleCal()" style="padding:10px 18px;font-size:0.65rem;">📆 Google Calendar</button>
+      </div>
+      <div style="text-align:center;">
+        <button class="btn" onclick="closeModal('evModal')" style="padding:8px 22px;font-size:0.65rem;background:transparent;color:var(--text-light);border:1px solid rgba(200,149,138,0.3);">Maybe Later</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1033,28 +1040,28 @@ body {
     <div class="sec-title">Celebrations</div>
     <div class="events-grid">
 
-      <div class="ev-card" onclick="showEvent('Engagement','💍','सगाई','21st November 2026','Rosebey Resort','6:00 PM onwards')">
+      <div class="ev-card" onclick="showEvent('Engagement','💍','सगाई','21st November 2026','Rosebey Resort','6:00 PM onwards','20261121T123000Z','20261121T163000Z')">
         <span class="ev-icon">💍</span>
         <div class="ev-name">Engagement</div>
         <div class="ev-name-hi">सगाई</div>
         <div class="ev-date">21 Nov 2026<br>6:00 PM</div>
       </div>
 
-      <div class="ev-card" onclick="showEvent('Haldi','💛','हल्दी','27th January 2027','Rosebey Resort','8:00 AM')">
+      <div class="ev-card" onclick="showEvent('Haldi','💛','हल्दी','27th January 2027','Rosebey Resort','8:00 AM','20270127T023000Z','20270127T053000Z')">
         <span class="ev-icon">💛</span>
         <div class="ev-name">Haldi</div>
         <div class="ev-name-hi">हल्दी</div>
         <div class="ev-date">27 Jan 2027<br>8:00 AM</div>
       </div>
 
-      <div class="ev-card" onclick="showEvent('Baraat','🐴','बारात','28th January 2027','Rosebey Resort','7:00 PM')">
+      <div class="ev-card" onclick="showEvent('Baraat','🐴','बारात','28th January 2027','Rosebey Resort','7:00 PM','20270128T133000Z','20270128T153000Z')">
         <span class="ev-icon">🐴</span>
         <div class="ev-name">Baraat</div>
         <div class="ev-name-hi">बारात</div>
         <div class="ev-date">28 Jan 2027<br>7:00 PM</div>
       </div>
 
-      <div class="ev-card" onclick="showEvent('Reception','🥂','स्वागत','28th January 2027','Rosebey Resort','9:00 PM onwards')">
+      <div class="ev-card" onclick="showEvent('Reception','🥂','स्वागत','28th January 2027','Rosebey Resort','9:00 PM onwards','20270128T153000Z','20270128T183000Z')">
         <span class="ev-icon">🥂</span>
         <div class="ev-name">Reception</div>
         <div class="ev-name-hi">स्वागत</div>
@@ -1294,8 +1301,13 @@ function submitRSVP() {
   launchConfetti();
 }
 
+// ── Current event store (for calendar actions) ──
+let _curEvent = {};
+
 // ── Event detail ──
-function showEvent(name, icon, hindi, date, venue, time) {
+function showEvent(name, icon, hindi, date, venue, time, dtStart, dtEnd) {
+  _curEvent = { name, icon, date, venue, time, dtStart, dtEnd };
+
   document.getElementById('evContent').innerHTML = `
     <div style="font-size:3.5rem;margin-bottom:10px;">${icon}</div>
     <div style="font-family:'Dancing Script',cursive;font-size:1.9rem;color:var(--deep-rose);margin-bottom:3px;">${name}</div>
@@ -1325,6 +1337,83 @@ function showEvent(name, icon, hindi, date, venue, time) {
     </div>
   `;
   openModal('evModal');
+}
+
+// ── Download .ics (Apple Calendar / Outlook) ──
+function downloadICS() {
+  const e = _curEvent;
+  const uid = 'ashutosh-shubhangi-' + e.name.toLowerCase().replace(/\s+/g,'-') + '@wedding2027';
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Ashutosh & Shubhangi Wedding//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTART:${e.dtStart}`,
+    `DTEND:${e.dtEnd}`,
+    `SUMMARY:${e.icon} ${e.name} — Ashutosh & Shubhangi's Wedding`,
+    `DESCRIPTION:You are cordially invited to the ${e.name} celebration of Ashutosh Tripathi & Shubhangi Jha.\\n\\nTime: ${e.time}\\nVenue: ${e.venue}`,
+    `LOCATION:${e.venue}`,
+    'STATUS:CONFIRMED',
+    'SEQUENCE:0',
+    'BEGIN:VALARM',
+    'TRIGGER:-PT1H',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:Reminder: ${e.name} starts in 1 hour!`,
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${e.name.toLowerCase().replace(/\s+/g,'-')}-ashutosh-shubhangi.ics`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  showCalToast(`${e.icon} "${e.name}" added to your calendar!`);
+}
+
+// ── Open Google Calendar ──
+function openGoogleCal() {
+  const e = _curEvent;
+  const title = encodeURIComponent(`${e.icon} ${e.name} — Ashutosh & Shubhangi's Wedding`);
+  const details = encodeURIComponent(`You are cordially invited to the ${e.name} celebration of Ashutosh Tripathi & Shubhangi Jha.\n\nTime: ${e.time}\nVenue: ${e.venue}`);
+  const location = encodeURIComponent(e.venue + ', India');
+  const url = `https://www.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${e.dtStart}/${e.dtEnd}&details=${details}&location=${location}`;
+  window.open(url, '_blank');
+  showCalToast(`${e.icon} Opening Google Calendar for "${e.name}"…`);
+}
+
+// ── Toast notification ──
+function showCalToast(msg) {
+  const existing = document.getElementById('cal-toast');
+  if (existing) existing.remove();
+  const t = document.createElement('div');
+  t.id = 'cal-toast';
+  t.textContent = msg;
+  t.style.cssText = `
+    position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:linear-gradient(135deg,var(--deep-rose),var(--burgundy));
+    color:#fff; padding:12px 22px; border-radius:50px;
+    font-family:'Montserrat',sans-serif; font-size:0.78rem; font-weight:500;
+    box-shadow:0 8px 30px rgba(94,32,53,0.5);
+    z-index:9999; white-space:nowrap;
+    opacity:0; transition:opacity 0.3s, transform 0.3s;
+    pointer-events:none;
+  `;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => {
+    t.style.opacity = '1';
+    t.style.transform = 'translateX(-50%) translateY(0)';
+  });
+  setTimeout(() => {
+    t.style.opacity = '0';
+    t.style.transform = 'translateX(-50%) translateY(10px)';
+    setTimeout(() => t.remove(), 400);
+  }, 3200);
 }
 
 // ── Sparkle on name click ──
