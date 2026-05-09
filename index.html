@@ -1905,6 +1905,28 @@ function spawnMusicNotes() {
 
   setTimeout(spawnMusicNotes, 1200 + Math.random() * 800);
 }
+
+// ── Stop music when tab is closed, hidden, or navigated away ──
+function _killMusic() {
+  if (wm.isPlaying) wm.stop();
+  if (wm.ctx) { try { wm.ctx.close(); } catch(e){} wm.ctx = null; }
+}
+
+// Tab switched / minimised → pause; coming back → resume
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (wm.isPlaying && wm.master && wm.ctx)
+      wm.master.gain.setTargetAtTime(0, wm.ctx.currentTime, 0.3);
+  } else {
+    if (wm.isPlaying && wm.master && wm.ctx)
+      wm.master.gain.setTargetAtTime(0.55, wm.ctx.currentTime, 0.3);
+  }
+});
+
+// Page close / refresh / navigation
+window.addEventListener('beforeunload', _killMusic);
+// iOS Safari fires pagehide instead of beforeunload
+window.addEventListener('pagehide', _killMusic);
 </script>
 
 <!-- ── Floating Music Player ── -->
