@@ -1829,24 +1829,52 @@ class WeddingMusic {
 const wm = new WeddingMusic();
 let _musicStarted = false;
 
+function _startMusicUI() {
+  const btn   = document.getElementById('musicBtn');
+  const label = document.getElementById('musicLabel');
+  const hint  = document.getElementById('musicHint');
+  wm.start();
+  _musicStarted = true;
+  btn.classList.add('playing');
+  label.textContent = 'Now Playing';
+  if (hint) { hint.style.opacity = '0'; setTimeout(() => hint.remove(), 500); }
+  spawnMusicNotes();
+}
+
+// Auto-start on first user interaction (browser autoplay policy)
+function _autoplayOnInteraction() {
+  if (_musicStarted) return;
+  _startMusicUI();
+  ['click','touchstart','keydown','scroll'].forEach(ev =>
+    document.removeEventListener(ev, _autoplayOnInteraction));
+}
+['click','touchstart','keydown','scroll'].forEach(ev =>
+  document.addEventListener(ev, _autoplayOnInteraction, { once: false }));
+
+// Also try immediate autoplay (works in some browsers / after prior interaction)
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    if (_musicStarted) return;
+    try {
+      const testCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (testCtx.state === 'running') {
+        testCtx.close();
+        _startMusicUI();
+      } else {
+        testCtx.close();
+      }
+    } catch(e) {}
+  }, 800);
+});
+
 function toggleMusic() {
   const btn   = document.getElementById('musicBtn');
   const label = document.getElementById('musicLabel');
 
   if (!wm.isPlaying) {
-    if (!_musicStarted) {
-      // Resume AudioContext if suspended (browser autoplay policy)
-      if (wm.ctx && wm.ctx.state === 'suspended') wm.ctx.resume();
-    }
-    wm.start();
-    _musicStarted = true;
-    btn.textContent = '🎵';
-    btn.classList.add('playing');
-    label.textContent = 'Now Playing';
-    spawnMusicNotes();
+    _startMusicUI();
   } else {
     wm.stop();
-    btn.textContent = '🎵';
     btn.classList.remove('playing');
     label.textContent = 'Play Music';
   }
@@ -1888,7 +1916,22 @@ function spawnMusicNotes() {
       style="background:linear-gradient(90deg,var(--blush) 100%,rgba(242,167,180,0.2) 100%)">
     <span class="vol-icon">🔊</span>
   </div>
-  <span class="music-label" id="musicLabel">Play Music</span>
+  <div id="musicHint" style="
+    background:linear-gradient(135deg,var(--deep-rose),var(--burgundy));
+    color:#fff; font-family:'Montserrat',sans-serif; font-size:0.62rem;
+    font-weight:500; letter-spacing:1.5px; padding:6px 14px;
+    border-radius:20px; white-space:nowrap;
+    box-shadow:0 4px 16px rgba(94,32,53,0.5);
+    animation:hintPulse 2s ease-in-out infinite;
+    transition:opacity 0.4s;">
+    🎵 Tap anywhere for music
+  </div>
+  <style>
+    @keyframes hintPulse {
+      0%,100%{transform:scale(1);} 50%{transform:scale(1.04);}
+    }
+  </style>
+  <span class="music-label" id="musicLabel">Now Playing</span>
   <button class="music-btn" id="musicBtn" onclick="toggleMusic()" title="Toggle wedding music">🎵</button>
 </div>
 
