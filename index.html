@@ -846,6 +846,126 @@ body {
   .events-grid { grid-template-columns:1fr 1fr; }
   .cd-box { padding:10px 5px; }
 }
+
+/* ── Music Player Widget ── */
+.music-player {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.music-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(135deg, var(--deep-rose), var(--burgundy));
+  box-shadow: 0 6px 24px rgba(94,32,53,0.55), 0 0 0 2px rgba(242,167,180,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  transition: transform 0.3s, box-shadow 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+.music-btn:hover {
+  transform: scale(1.12);
+  box-shadow: 0 10px 32px rgba(94,32,53,0.7), 0 0 0 3px rgba(242,167,180,0.5);
+}
+.music-btn.playing { animation: musicPulse 2s ease-in-out infinite; }
+@keyframes musicPulse {
+  0%,100% { box-shadow: 0 6px 24px rgba(94,32,53,0.55), 0 0 0 2px rgba(242,167,180,0.3); }
+  50%      { box-shadow: 0 6px 24px rgba(94,32,53,0.55), 0 0 0 8px rgba(242,167,180,0.12), 0 0 30px rgba(242,167,180,0.25); }
+}
+
+/* Ripple rings when playing */
+.music-btn.playing::before,
+.music-btn.playing::after {
+  content:'';
+  position:absolute;
+  border-radius:50%;
+  border: 1.5px solid rgba(242,167,180,0.5);
+  animation: musicRing 2s ease-out infinite;
+}
+.music-btn.playing::after { animation-delay: 1s; }
+@keyframes musicRing {
+  0%   { width:100%; height:100%; opacity:0.8; }
+  100% { width:220%; height:220%; opacity:0; }
+}
+
+.music-label {
+  background: linear-gradient(135deg, var(--deep-rose), var(--burgundy));
+  color: rgba(255,255,255,0.9);
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(10px);
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(94,32,53,0.4);
+}
+.music-player:hover .music-label { opacity:1; transform:translateX(0); }
+
+.music-volume-wrap {
+  background: linear-gradient(135deg, rgba(94,32,53,0.92), rgba(58,14,30,0.95));
+  border: 1px solid rgba(242,167,180,0.2);
+  border-radius: 14px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transform: translateY(8px) scale(0.95);
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+  box-shadow: 0 6px 20px rgba(94,32,53,0.5);
+}
+.music-player:hover .music-volume-wrap {
+  opacity: 1; transform: translateY(0) scale(1); pointer-events: all;
+}
+.vol-icon { font-size:0.9rem; }
+.vol-slider {
+  -webkit-appearance: none;
+  width: 80px; height: 3px;
+  background: linear-gradient(90deg, var(--blush) 60%, rgba(242,167,180,0.2) 60%);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+.vol-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--blush);
+  box-shadow: 0 0 6px rgba(242,167,180,0.6);
+  cursor: pointer;
+}
+
+/* Floating music notes animation */
+.music-note-float {
+  position: fixed;
+  pointer-events: none;
+  z-index: 499;
+  font-size: 1rem;
+  animation: noteFloat 3s ease-out forwards;
+  opacity: 0.7;
+}
+@keyframes noteFloat {
+  0%   { transform: translate(0,0) rotate(-10deg); opacity:0.7; }
+  100% { transform: translate(-30px,-80px) rotate(20deg); opacity:0; }
+}
 </style>
 </head>
 <body>
@@ -1491,6 +1611,325 @@ document.addEventListener('mousemove', (e) => {
 document.addEventListener('mouseleave', () => {
   card.style.transform = 'perspective(1400px) rotateY(0deg) rotateX(0deg)';
 });
+
+// ════════════════════════════════════════════
+// 🎵 INDIAN WEDDING INSTRUMENTAL — Web Audio
+// Tanpura drone + Sitar melody (Raga Yaman)
+// ════════════════════════════════════════════
+class WeddingMusic {
+  constructor() {
+    this.ctx        = null;
+    this.master     = null;
+    this.isPlaying  = false;
+    this.tanpOscs   = [];
+    this.schedTimer = null;
+    this.melIdx     = 0;
+    this.nextTime   = 0;
+    this.BPM        = 60;
+
+    // Raga Yaman scale (C as Sa, sharp Ma = F#)
+    const C3=130.81, D3=146.83, G3=196.00, C4=261.63;
+    const D4=293.66, E4=329.63, Fs4=369.99, G4=392.00,
+          A4=440.00, B4=493.88, C5=523.25, D5=587.33, E5=659.25;
+
+    this.freq = { C3,D3,G3,C4,D4,E4,Fs4,G4,A4,B4,C5,D5,E5 };
+
+    // Tanpura strings: Sa Pa Sa Sa (C3 G3 C4 C4)
+    this.tanpura = [C3, G3, C4, C4];
+
+    // Melodic phrase — {f: freq, d: duration-in-beats, v: velocity 0-1}
+    // A gentle Yaman alap + gat
+    this.phrase = [
+      {f:C4, d:1.5,v:.9}, {f:D4, d:.5,v:.7},
+      {f:E4, d:1, v:.8}, {f:Fs4,d:1, v:.85},
+      {f:G4, d:1.5,v:.9}, {f:A4, d:.5,v:.7},
+      {f:G4, d:.5, v:.6}, {f:Fs4,d:.5,v:.65},
+      {f:E4, d:1, v:.75},{f:D4, d:.5,v:.6},
+      {f:C4, d:2, v:.85},
+      {f:null,d:1},                              // rest
+      {f:G4, d:.5,v:.7}, {f:A4, d:.5,v:.75},
+      {f:B4, d:1, v:.8}, {f:C5, d:1.5,v:.9},
+      {f:B4, d:.5,v:.7}, {f:A4, d:.5,v:.65},
+      {f:G4, d:1, v:.75},{f:Fs4,d:.5,v:.6},
+      {f:E4, d:.5,v:.55},{f:D4, d:1, v:.7},
+      {f:C4, d:2.5,v:.85},
+      {f:null,d:1.5},
+      {f:D5, d:.5,v:.75},{f:C5, d:.5,v:.8},
+      {f:B4, d:1, v:.7}, {f:A4, d:.5,v:.65},
+      {f:G4, d:.5,v:.6}, {f:Fs4,d:1, v:.7},
+      {f:E4, d:.5,v:.65},{f:D4, d:.5,v:.6},
+      {f:C4, d:3, v:.9},
+      {f:null,d:2},
+    ];
+  }
+
+  // ── Kick off ──────────────────────────────
+  start() {
+    this.ctx    = new (window.AudioContext || window.webkitAudioContext)();
+    this.master = this.ctx.createGain();
+    this.master.gain.setValueAtTime(0, this.ctx.currentTime);
+    this.master.gain.linearRampToValueAtTime(0.55, this.ctx.currentTime + 2);
+
+    const comp = this.ctx.createDynamicsCompressor();
+    comp.threshold.value = -18; comp.ratio.value = 4;
+    this.master.connect(comp);
+    comp.connect(this.ctx.destination);
+
+    this._buildReverb().then(reverb => {
+      this.reverb = reverb;
+      this._startTanpura();
+      this._startAmbientPad();
+      this.nextTime = this.ctx.currentTime + 1.5;
+      this.schedTimer = setInterval(() => this._scheduler(), 30);
+      this.isPlaying = true;
+    });
+  }
+
+  // ── Stop ─────────────────────────────────
+  stop() {
+    clearInterval(this.schedTimer);
+    if (this.master) {
+      this.master.gain.setValueAtTime(this.master.gain.value, this.ctx.currentTime);
+      this.master.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 1.2);
+    }
+    setTimeout(() => {
+      this.tanpOscs.forEach(o => { try { o.stop(); } catch(e){} });
+      this.tanpOscs = [];
+      try { this.ctx.close(); } catch(e){}
+      this.ctx = null;
+    }, 1400);
+    this.isPlaying = false;
+  }
+
+  setVol(v) {
+    if (this.master && this.ctx)
+      this.master.gain.setTargetAtTime(v * 0.55, this.ctx.currentTime, 0.05);
+  }
+
+  // ── Convolution reverb ────────────────────
+  async _buildReverb() {
+    const ctx = this.ctx;
+    const len = ctx.sampleRate * 2.8;
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < len; i++)
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.2);
+    }
+    const conv = ctx.createConvolver();
+    conv.buffer = buf;
+    const wet = ctx.createGain(); wet.gain.value = 0.22;
+    conv.connect(wet); wet.connect(this.master);
+    return conv;
+  }
+
+  // ── Tanpura drone ─────────────────────────
+  _startTanpura() {
+    const ctx = this.ctx;
+    const beatDur = 60 / this.BPM;
+
+    this.tanpura.forEach((freq, i) => {
+      // Main string tone
+      const osc  = ctx.createOscillator();
+      const filt = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.value = freq;
+      filt.type = 'lowpass';
+      filt.frequency.value = 900;
+      filt.Q.value = 0.8;
+
+      // Pluck envelope cycling every ~3 beats
+      const cycleLen = beatDur * 3;
+      const startAt  = this.ctx.currentTime + i * (beatDur * 0.75);
+      this._scheduleInfinitePluck(gain, startAt, cycleLen, 0.055, 0.008, 0.9);
+
+      // Subtle vibrato LFO
+      const lfo = ctx.createOscillator();
+      const lfoG = ctx.createGain();
+      lfo.frequency.value = 5.5 + i * 0.3;
+      lfoG.gain.value = freq * 0.003;
+      lfo.connect(lfoG); lfoG.connect(osc.frequency);
+
+      osc.connect(filt); filt.connect(gain); gain.connect(this.master);
+      if (this.reverb) gain.connect(this.reverb);
+
+      osc.start(startAt); lfo.start();
+      this.tanpOscs.push(osc, lfo);
+    });
+  }
+
+  // Schedule recurring pluck envelopes
+  _scheduleInfinitePluck(gainNode, start, cycle, peak, atk, decay) {
+    const ctx = this.ctx;
+    let t = start;
+    const schedule = () => {
+      if (!this.isPlaying && this.ctx === null) return;
+      gainNode.gain.setValueAtTime(0.001, t);
+      gainNode.gain.linearRampToValueAtTime(peak, t + atk);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, t + cycle * decay);
+      t += cycle;
+      this._raf = setTimeout(schedule, (t - ctx.currentTime - 0.5) * 1000);
+    };
+    schedule();
+  }
+
+  // ── Ambient pad (sustained chord) ────────
+  _startAmbientPad() {
+    const ctx = this.ctx;
+    // C major 7 voicing for warmth
+    [130.81, 164.81, 196.00, 246.94, 261.63].forEach((freq, i) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filt = ctx.createBiquadFilter();
+
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      // Gentle detune for chorus width
+      osc.detune.value = (i % 2 === 0 ? 4 : -4);
+
+      filt.type = 'lowpass';
+      filt.frequency.value = 500;
+
+      gain.gain.value = 0.018;
+
+      // Slow swell LFO
+      const lfo = ctx.createOscillator();
+      const lfoG = ctx.createGain();
+      lfo.frequency.value = 0.08 + i * 0.012;
+      lfoG.gain.value = 0.006;
+      lfo.connect(lfoG); lfoG.connect(gain.gain);
+
+      osc.connect(filt); filt.connect(gain); gain.connect(this.master);
+
+      osc.start(); lfo.start();
+      this.tanpOscs.push(osc, lfo);
+    });
+  }
+
+  // ── Melody scheduler ─────────────────────
+  _scheduler() {
+    const lookahead = 0.12;
+    while (this.nextTime < this.ctx.currentTime + lookahead) {
+      const note = this.phrase[this.melIdx % this.phrase.length];
+      const beatDur = 60 / this.BPM;
+      const dur = note.d * beatDur;
+
+      if (note.f) this._playSitar(note.f, this.nextTime, dur * 0.82, note.v || 0.8);
+
+      this.nextTime += dur;
+      this.melIdx++;
+    }
+  }
+
+  // ── Sitar pluck ──────────────────────────
+  _playSitar(freq, time, dur, vel) {
+    const ctx = this.ctx;
+
+    // Two slightly detuned saws for sitar shimmer
+    [0, 2.5, -1.5].forEach((cents, i) => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filt = ctx.createBiquadFilter();
+
+      osc.type = 'sawtooth';
+      osc.frequency.value = freq;
+      osc.detune.value = cents;
+
+      // Sitar has a buzzy bandpass character
+      filt.type = 'bandpass';
+      filt.frequency.value = freq * (2.5 + i * 0.4);
+      filt.Q.value = 3;
+
+      // Pluck envelope
+      const pk = vel * (i === 0 ? 0.18 : 0.06);
+      gain.gain.setValueAtTime(0.001, time);
+      gain.gain.linearRampToValueAtTime(pk, time + 0.003);
+      gain.gain.exponentialRampToValueAtTime(pk * 0.35, time + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
+
+      // Pitch slight fall (sitar characteristic)
+      if (i === 0) {
+        osc.frequency.setValueAtTime(freq * 1.008, time);
+        osc.frequency.exponentialRampToValueAtTime(freq, time + 0.06);
+      }
+
+      osc.connect(filt); filt.connect(gain); gain.connect(this.master);
+      if (this.reverb) gain.connect(this.reverb);
+
+      osc.start(time);
+      osc.stop(time + dur + 0.5);
+    });
+  }
+}
+
+// ── Music Player UI ───────────────────────
+const wm = new WeddingMusic();
+let _musicStarted = false;
+
+function toggleMusic() {
+  const btn   = document.getElementById('musicBtn');
+  const label = document.getElementById('musicLabel');
+
+  if (!wm.isPlaying) {
+    if (!_musicStarted) {
+      // Resume AudioContext if suspended (browser autoplay policy)
+      if (wm.ctx && wm.ctx.state === 'suspended') wm.ctx.resume();
+    }
+    wm.start();
+    _musicStarted = true;
+    btn.textContent = '🎵';
+    btn.classList.add('playing');
+    label.textContent = 'Now Playing';
+    spawnMusicNotes();
+  } else {
+    wm.stop();
+    btn.textContent = '🎵';
+    btn.classList.remove('playing');
+    label.textContent = 'Play Music';
+  }
+}
+
+function setVolume(v) {
+  const slider = document.getElementById('volSlider');
+  // Update gradient fill
+  slider.style.background = `linear-gradient(90deg, var(--blush) ${v*100}%, rgba(242,167,180,0.2) ${v*100}%)`;
+  wm.setVol(parseFloat(v));
+}
+
+// Floating music notes
+function spawnMusicNotes() {
+  if (!wm.isPlaying) return;
+  const notes = ['♩','♪','♫','♬','🎵','🎶'];
+  const btn = document.getElementById('musicBtn');
+  const rect = btn.getBoundingClientRect();
+
+  const n = document.createElement('span');
+  n.className = 'music-note-float';
+  n.textContent = notes[Math.floor(Math.random() * notes.length)];
+  n.style.left  = (rect.left + Math.random() * 30 - 10) + 'px';
+  n.style.top   = (rect.top  - 10) + 'px';
+  n.style.color = ['#f2a7b4','#e07d90','#c49a8a','#e8b48a'][Math.floor(Math.random()*4)];
+  document.body.appendChild(n);
+  setTimeout(() => n.remove(), 3100);
+
+  setTimeout(spawnMusicNotes, 1200 + Math.random() * 800);
+}
 </script>
+
+<!-- ── Floating Music Player ── -->
+<div class="music-player" id="musicPlayer">
+  <div class="music-volume-wrap">
+    <span class="vol-icon">🔈</span>
+    <input class="vol-slider" id="volSlider" type="range" min="0" max="1" step="0.02" value="1"
+      oninput="setVolume(this.value)"
+      style="background:linear-gradient(90deg,var(--blush) 100%,rgba(242,167,180,0.2) 100%)">
+    <span class="vol-icon">🔊</span>
+  </div>
+  <span class="music-label" id="musicLabel">Play Music</span>
+  <button class="music-btn" id="musicBtn" onclick="toggleMusic()" title="Toggle wedding music">🎵</button>
+</div>
+
 </body>
 </html>
